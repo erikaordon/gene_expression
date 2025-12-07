@@ -11,7 +11,7 @@ from sklearn.metrics import f1_score, precision_score, recall_score, roc_auc_sco
 
 # Preparación de datos 
 
-df_data, df_labels = SVM.dowload_data('../Data/gene+expression+cancer+rna+seq/data.csv', 
+df_data, df_labels = SVM.download_data('../Data/gene+expression+cancer+rna+seq/data.csv', 
                                       '../Data/gene+expression+cancer+rna+seq/labels.csv')
 
 # Verificar categorías de clase
@@ -104,7 +104,8 @@ search_parameters_rbf = {'C': loguniform(1e-3, 1e2),
                         'class_weight':['balanced']}
 
 search_parameters_linear = { 'C': loguniform(1e-3, 1e2),
-                            'kernel': ['linear']}
+                            'kernel': ['linear'],
+                            }
 
 #=================================================================
 
@@ -255,3 +256,160 @@ plot_per_class(model=best_svm,
 
 results = SVM.pd.DataFrame(classifier.cv_results_)
 results.to_csv('../results/results_svm.csv', index=True, encoding='utf-8')
+
+#=============================================================================
+
+# Comprobación con reducción de datos:
+
+import SVM_reduction
+
+ks = [500, 1000, 2000, 3000]
+resultados = []
+
+mejor_score = -np.inf
+mejor_k = None
+mejor_classifier = None
+mejor_selector = None
+mejor_vt = None
+
+for k in ks:
+  classifier, selector, vt_current = SVM_reduction.training_with_reduction(search_parameters_rbf,
+                            search_parameters_linear,
+                            X_train,
+                            y_train,
+                            k=k)
+  mean_cv = classifier.best_score_
+  resultados.append((k, mean_cv))
+
+  if mean_cv > mejor_score:
+        mejor_score = mean_cv
+        mejor_k = k
+        mejor_classifier = classifier
+        mejor_selector = selector
+        mejor_vt = vt_current
+
+print("Resultados por k:", resultados)
+print("Mejor k:", mejor_k, "con score:", mejor_score)
+
+X_test_var = mejor_vt.transform(X_test)
+X_test_sel = mejor_selector.transform(X_test_var)
+
+best_svm = mejor_classifier.best_estimator_
+y_pred   = best_svm.predict(X_test_sel)
+
+print("Mejor F-1 weighted score")
+print(mejor_classifier.best_score_)
+print("Mejores hyperparámetros")
+print(mejor_classifier.best_params_)
+
+y_pred, y_score_probabilities = SVM_reduction.evaluation(best_svm, X_test_sel, y_test)
+
+print("Resultados de evaluación")
+print("F-1 weighted: {}".format(f1_score(y_test, y_pred, average='weighted')))
+print("Precision: {}".format(precision_score(y_test, y_pred, average='weighted')))
+print("Recall: {}".format(recall_score(y_test, y_pred, average='weighted')))
+print("MCC: {}". format(matthews_corrcoef(y_test, y_pred)))
+print("AUROC weighted: {}".format(roc_auc_score(y_test, y_score_probabilities, multi_class='ovr', average='weighted')))
+
+# Matriz de confusión
+svm_confusion_matrix=SVM.confusion_matrix(y_test,y_pred)
+print(svm_confusion_matrix)
+
+disp = SVM.ConfusionMatrixDisplay(confusion_matrix=svm_confusion_matrix,
+                               display_labels=classifier.classes_)
+disp.plot(cmap=plt.cm.Blues)
+plt.show()
+
+# Reporte de clasificación
+print(SVM.classification_report(y_test,y_pred))
+
+def plot(model, X_test, y_test, class_names):
+
+    classes = np.unique(y_test)
+    n_classes = len(classes)
+
+    y_test_bin = label_binarize(y_test, classes=classes)
+
+    y_score = model.predict_proba(X_test)
+
+    fpr = {}
+    tpr = {}
+    roc_auc = {}
+
+    for i in range(n_classes):
+        fpr[i], tpr[i], _ = roc_curve(y_test_bin[:, i], y_score[:, i])
+        roc_auc[i] = auc(fpr[i], tpr[i])
+
+    auc_roc_weighted_ovr = roc_auc_score(
+        y_test,
+        y_score,
+        multi_class="ovr",
+        average="weighted"
+    )
+
+    print("AUC ROC (OVR, weighted):", auc_roc_weighted_ovr)
+
+    plt.figure(figsize=(8, 8))
+
+    for i in range(n_classes):
+        plt.plot(
+            fpr[i],
+            tpr[i],
+            label=f'Clase {classes[i]} (AUC = {roc_auc[i]:.2f})'
+        )
+
+    plt.plot([0, 1], [0, 1], linestyle="--", color="gray")
+
+    plt.title('Curvas ROC multiclase (one-vs-rest) – SVM')
+    plt.xlabel("False Positive Rate")
+    plt.ylabel("True Positive Rate")
+    plt.legend(loc="lower right")
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()
+
+best_svm = mejor_classifier.best_estimator_
+y_pred = best_svm.predict(X_test_sel)
+
+plot(
+        model = best_svm,
+        X_test = X_test_sel,
+        y_test = y_test,
+        class_names = le.classes_
+    )
+
+# Curva ROC por cada clase:
+
+def plot_per_class(model, X_test, y_test, class_names):
+
+  classes = np.unique(y_test)
+  y_test_bin = label_binarize(y_test, classes=classes)
+  y_score_probabilities = model.predict_proba(X_test)
+
+  for i, cls in enumerate(classes):
+
+        fpr, tpr, _ = roc_curve(y_test_bin[:, i], y_score_probabilities[:, i]) # Use probabilities
+        roc_auc = auc(fpr, tpr)
+
+        plt.figure(figsize=(6, 6))
+        plt.plot(fpr, tpr, lw=2,
+                 label=f"AUC = {roc_auc:.2f}")
+        plt.plot([0, 1], [0, 1], linestyle="--", color="gray")
+
+        title = f"ROC – Clase {cls}"
+        if class_names is not None:
+            title = f"ROC – {class_names[cls]}"
+
+        plt.title(title)
+        plt.xlabel("False Positive Rate")
+        plt.ylabel("True Positive Rate")
+        plt.legend(loc="lower right")
+        plt.grid(True)
+        plt.tight_layout()
+        plt.show()
+
+
+plot_per_class(model=best_svm,
+    X_test=X_test_sel,
+    y_test=y_test,
+    class_names=le.classes_)
