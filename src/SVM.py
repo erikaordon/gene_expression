@@ -22,17 +22,54 @@ import matplotlib.pyplot as plt
 # from sklearn.metrics import PrecisionRecallDisplay
 
 # Caragar los datos
+
 def dowload_data(data_file, labels_file):
-    relative_path_data = '../Data/gene+expression+cancer+rna+seq/data.csv'
-    df_data = pd.read_csv(relative_path_data)
-    print(df_data.head(6))
+  relative_path_data = data_file
+  df_data = pd.read_csv(relative_path_data)
 
-    relative_path_labels = '../Data/gene+expression+cancer+rna+seq/labels.csv'
-    df_labels = pd.read_csv(relative_path_labels)
-    print(df_labels.head(6))
+  relative_path_labels = labels_file
+  df_labels = pd.read_csv(relative_path_labels)
 
-# Verificar categorías de clase 
-print(df_labels.iloc[:,1].unique())
+  return df_data, df_labels
 
-print(f"Dimensionalidad del data set: {df_data.shape}")
-print(f"Dimensionalidad de los label: {df_labels.shape}")
+# Separación de datos en conjuntos de entrenamiento y evaluación
+X_train, X_test, y_train, y_test = train_test_split(df_data, df_labels, test_size=0.2, random_state=42, stratify=df_labels)
+
+# Escalamiento de datos
+scaler = StandardScaler() # Instanciar
+# StandardScaler - normalización mediante puntuación z
+  # estandariza características elimminando la media y escalándollas a una varianza
+  # fórmula: x_scaled = (X - μ) / σ
+  # Efecto: media = 0 y ds = 1
+scaler.fit(X_train) # calcular media y desviación estándar
+X_train = scaler.transform(X_train) # aplicar transformación de estandarización
+X_test = scaler.transform(X_test)
+
+# Entrenamiento del SVM (support vector machine)
+
+def training( search_parameters_rbf, search_parameters_linear, X_train, y_train):
+
+    svm_model= SVC(probability=True)
+
+    clf = RandomizedSearchCV(svm_model,
+                            param_distributions=[search_parameters_linear, search_parameters_rbf],
+                            random_state=0, cv=3,
+                            scoring='f1_weighted',
+                            verbose=1, n_jobs=-1, n_iter=30)
+
+    classifier = clf.fit(X_train, y_train)
+
+    return classifier
+
+# Evaluación
+
+def evaluation(classifier, X_test, y_test):
+  # Evaluación
+  # Predicción de los nuevos datos.
+  y_pred = classifier.predict(X_test)
+  # Antes de la preducción de los nuevos datos
+  # Es necesaria para obtener los datos para elaborar la curva ROC.
+  # El resultado son valores continuos
+  y_score = classifier.decision_function(X_test)
+
+  return y_pred, y_score
