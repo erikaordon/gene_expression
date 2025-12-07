@@ -6,8 +6,6 @@ from sklearn.svm import SVC
 from sklearn.model_selection import RandomizedSearchCV
 # Importar objeto para separación de datos en conjuntos de entrenamiento y evaluación
 from sklearn.model_selection import train_test_split
-# Obtener valore de una distribución uniforme
-from scipy.stats import uniform, expon
 # Importar objeto para escalamiento de datos
 from sklearn.preprocessing import StandardScaler #normalización mediante puntuación z
 # Importar metricas de evaluación
@@ -15,35 +13,46 @@ from sklearn.metrics import f1_score, precision_score, recall_score, roc_auc_sco
 # Importar objeto para imprimir matriz de confusión
 from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 # Importar objeto para imprimir reporte de clasificación
-from sklearn.metrics import classification_report
+from sklearn.metrics import classification_report, matthews_corrcoef
 # Plots
 import matplotlib.pyplot as plt
 # Import object to plot Precision-Recall curve
 # from sklearn.metrics import PrecisionRecallDisplay
+from sklearn.preprocessing import LabelEncoder, label_binarize
+
+
+from scipy.special import softmax
+import numpy as np
 
 # Caragar los datos
 
 def dowload_data(data_file, labels_file):
-  relative_path_data = data_file
-  df_data = pd.read_csv(relative_path_data)
+  df_data = pd.read_csv(data_file)
 
-  relative_path_labels = labels_file
-  df_labels = pd.read_csv(relative_path_labels)
+  df_labels = pd.read_csv(labels_file)
 
   return df_data, df_labels
 
 # Separación de datos en conjuntos de entrenamiento y evaluación
-X_train, X_test, y_train, y_test = train_test_split(df_data, df_labels, test_size=0.2, random_state=42, stratify=df_labels)
+def split_scale(df_data, df_labels, test_size=0.2, random_state=42):
+    X_train, X_test, y_train, y_test = train_test_split(
+       df_data, 
+       df_labels, 
+       test_size=test_size,
+       random_state=random_state, 
+       stratify=df_labels)
 
-# Escalamiento de datos
-scaler = StandardScaler() # Instanciar
+    # Escalamiento de datos
+    scaler = StandardScaler() # Instanciar
 # StandardScaler - normalización mediante puntuación z
   # estandariza características elimminando la media y escalándollas a una varianza
   # fórmula: x_scaled = (X - μ) / σ
   # Efecto: media = 0 y ds = 1
-scaler.fit(X_train) # calcular media y desviación estándar
-X_train = scaler.transform(X_train) # aplicar transformación de estandarización
-X_test = scaler.transform(X_test)
+    scaler.fit(X_train) # calcular media y desviación estándar
+    X_train = scaler.transform(X_train) # aplicar transformación de estandarización
+    X_test = scaler.transform(X_test)    
+
+    return X_train, X_test, y_train, y_test, scaler
 
 # Entrenamiento del SVM (support vector machine)
 
@@ -71,5 +80,6 @@ def evaluation(classifier, X_test, y_test):
   # Es necesaria para obtener los datos para elaborar la curva ROC.
   # El resultado son valores continuos
   y_score = classifier.decision_function(X_test)
+  y_score_probability = softmax(y_score, axis=1)
 
-  return y_pred, y_score
+  return y_pred, y_score_probability
