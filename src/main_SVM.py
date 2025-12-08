@@ -270,14 +270,14 @@ print("AUROC weighted: {}".format(roc_auc_score(y_test, y_score_probabilities, m
 svm_confusion_matrix=confusion_matrix(y_test,y_pred)
 print(f"Matriz de confusión con la reducción de dimensionalidad: {svm_confusion_matrix}")
 
-disp = SVM.ConfusionMatrixDisplay(confusion_matrix=svm_confusion_matrix,
+disp = ConfusionMatrixDisplay(confusion_matrix=svm_confusion_matrix,
                                display_labels=classifier.classes_)
 disp.plot(cmap=plt.cm.Blues)
 plt.savefig('../results/SVM_results/confusion_matrix_with_reduction.png')
 plt.show()
 
 # Reporte de clasificación
-print(f"Reporte de clasificación con reducción de dimensionalidad: {SVM.classification_report(y_test,y_pred)}")
+print(f"Reporte de clasificación con reducción de dimensionalidad: {classification_report(y_test,y_pred)}")
 
 # ROC curve plot 
 
@@ -293,7 +293,7 @@ ROC_plot_with_reduction = SVM.plot(
 
 # Curva ROC por cada clase:
 
-ROC_curve_per_class=plot_per_class(model=best_svm,
+ROC_curve_per_class=SVM.plot_per_class(model=best_svm,
     X_test=X_test_sel,
     y_test=y_test,
     class_names=le.classes_, 
