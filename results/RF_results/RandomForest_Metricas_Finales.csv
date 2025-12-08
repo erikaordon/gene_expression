@@ -1,3 +1,2 @@
-version https://git-lfs.github.com/spec/v1
-oid sha256:c928b8797f31c0d4d5a48dea5991c5f70576cad739558cdecaff3c2603ea901c
-size 159
+F1 (weighted),Precision (weighted),Recall (weighted),MCC,AUC (weighted/OVR)
+0.9874494186682355,0.9879783610498898,0.9875776397515528,0.9837681852353809,0.9999766496987811
