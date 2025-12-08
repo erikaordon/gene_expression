@@ -1,29 +1,35 @@
-# Modularización
+# Importar funciones del archivo SVM.py como módulo
 import SVM 
+# Importar objeto para manejar matrices
 import numpy as np
+# Importar objeto para graficar (plots)
 import matplotlib.pyplot as plt
-from sklearn.decomposition import PCA
-# Obtener valore de una distribución uniforme
-from scipy.stats import loguniform
-from sklearn.metrics import f1_score, precision_score, recall_score, roc_auc_score, roc_curve, make_scorer, matthews_corrcoef
-
-# MAIN
+# Importar objeto para reducción de dimensionalidad 
+from sklearn.decomposition import PCA # Para visualización y reducción de dimensionalidad
+# Importar objetos para obtener valores que se distribuyen uniformemente en una escala logarítmica (variables aleatorias continuas). 
+from scipy.stats import loguniform # Para hiperparámtros 
+# Importar métricas de evaluación
+from sklearn.metrics import f1_score, precision_score, recall_score, roc_auc_score, roc_curve, make_scorer, matthews_corrcoef, confusion_matrix, ConfusionMatrixDisplay, classification_report, matthews_corrcoef, auc
+# Importar objeto para convertir categorías en números y en formato binario 
+from sklearn.preprocessing import LabelEncoder, label_binarize
+# Importar objeto para concatenar pasos de procesamiento y estimación 
+from sklearn.pipeline import Pipeline # Simplificación en cross-validation e hiperparámetros
 
 # Preparación de datos 
-
 df_data, df_labels = SVM.download_data('../Data/gene+expression+cancer+rna+seq/data.csv', 
                                       '../Data/gene+expression+cancer+rna+seq/labels.csv')
 
 # Verificar categorías de clase
-print(df_labels.iloc[:,1].unique())
+print(f"Categorías de clase: {df_labels.iloc[:,1].unique()}")
 
 # Verificar dimensionalidad de datos
 print(f"Dimensionalidad del data set: {df_data.shape}")
 print(f"Dimensionalidad de los label: {df_labels.shape}")
 
 # Comprobación de la dimensionalidad de los datos
-
+# Comprobar si existen las mismas muestras en df_data que en df_labels
 samples_data = set(df_data['Unnamed: 0']) - set(df_labels['Unnamed: 0'])
+# Comprobar si existen las mismas muestras en df_labels que en df_data
 samples_labels = set(df_labels['Unnamed: 0']) - set(df_data['Unnamed: 0'])
 
 if samples_data:
@@ -37,85 +43,111 @@ else:
   print("Todas las muestras se comparten entre los labels y los datos")
 
 # Verificar ejemplos por categoría, verificar si existe desbalance de datos
-print(df_labels.groupby('Class').size())
+print(f"Frecuencia de las categorías: {df_labels.groupby('Class').size()}")
 
 # Preparar datos
 # X = sólo datos de características de ejemplos
 # y = categorías de clase para cada ejemplo
 
+# Quitar la primer columna, obtaculiza el proceso de aprendizaje 
 df_data = df_data.drop(['Unnamed: 0'], axis=1)
+# df_labels ahora tiene solamente la información correspondiente a las categorías
 df_labels = df_labels.iloc[:, 1].values
 
+# Mostrar los resultados 
 print("Datos")
 print(df_data.head(6))
 print("Categorias de clase")
-print(df_labels[3])
+print(df_labels[:6])
 
 # Codificar las clases
-le = SVM.LabelEncoder()
+le = LabelEncoder()
 df_labels = le.fit_transform(df_labels)
-print(df_labels)
-
+print(f"Muestra de la codificación. {df_labels[:6]}")
 #==========================================================
 
-# Desbalance de los datos
+# Mostrar desbalance de los datos
 
+# Hacer un conteo de clases 
 classes, counts = np.unique(df_labels, return_counts=True)
+class_names = le.inverse_transform(classes)
 
+# Vizualización 
 plt.figure(figsize=(8,6))
-plt.bar(classes, counts, tick_label=classes, color=['cornflowerblue', 'royalblue', 'lightsteelblue', 'midnightblue','darkblue'])
-
+plt.bar(classes, counts, 
+        tick_label=class_names, 
+        color=['cornflowerblue', 'royalblue', 'lightsteelblue', 'midnightblue','darkblue'])
 plt.xlabel('Clase')
 plt.ylabel('Número de ocurrencias')
 plt.title("Distribución de clases (desbalance de los datos)")
-
+# Modificiar los números que corresponden a cada categoría
 for i, count in enumerate(counts):
   plt.text(i, count + 10, str(count), ha='center', va='bottom')
-
 plt.tight_layout()
+plt.savefig('../results/SVM_results/Distribution.png')
 plt.show()
 
 #======================================================
 
 # Separación de datos en conjuntos de entrenamiento y evaluación
 # y Escalamiento de los datos 
-X_train, X_test, y_train, y_test, scaler = SVM.split_scale(df_data, df_labels)
+X_train_PCA, X_test_PCA, y_train, y_test, scaler = SVM.split_scale(df_data, df_labels)
 
 #====================================================
 
+# Gráficas 
 # PCA - visuaización para la desición del kernel 
 
+# Reducción de dimensionalidad 
 pca = PCA(n_components=2)
-x_pca = pca.fit_transform(X_train)
+# Transformación de los datos
+x_pca = pca.fit_transform(X_train_PCA)
 
+# Vizualización
 plt.figure(figsize=(8, 6))
 scatter_plot = plt.scatter(x_pca[:, 0], x_pca[:, 1], c= y_train)
-plt.legend(*scatter_plot.legend_elements(), title="Clases")
+handles, labels = scatter_plot.legend_elements()
+plt.legend(handles, class_names, title="Clases")
+plt.xlabel("PC1")
+plt.ylabel("PC2")
 plt.grid(True)
+plt.savefig('../results/SVM_results/PCA_for_visualization.png')
 plt.show()
 
 #============================================================
 
-# Hiperparámetros 
+# Hiperparámetros para el entrenamiento de SVM 
+# NOTA: la decisión de kernels se hizo con base en el plot anterior
 
-search_parameters_rbf = {'C': loguniform(1e-3, 1e2),
-                        'gamma': loguniform(1e-4, 1),
-                        'kernel': ['rbf'],
-                        'class_weight':['balanced']}
+# Se vuelve a llamar a la función para separar lo datos de entrenamiento y evaluación
+X_train, X_test, y_train, y_test = SVM.split(df_data, df_labels)
 
-search_parameters_linear = { 'C': loguniform(1e-3, 1e2),
-                            'kernel': ['linear'],
-                            }
+# Definición de la función Pipeline
+# Se define la función para los datos de validación 
+pipeline = Pipeline([('scaler', SVM.StandardScaler()),
+                     ('svm', SVM.SVC(probability=True))])
+
+# Diccionario con los hiperparámetros para los kernels rbf y linear
+                        # kernel rbf
+search_parameters = [{'svm__C': loguniform(1e-3, 1e2),
+                        'svm__gamma': loguniform(1e-4, 1),
+                    'svm__kernel': ['rbf'],
+                        'svm__class_weight':['balanced']},
+                        
+                        # kernel linear
+                        {'svm__C': loguniform(1e-3, 1e2),
+                            'svm__kernel': ['linear']}
+                        ]
 
 #=================================================================
 
 # Verificamos resultados de entrenamiento y cross-validation
-
-classifier = SVM.training( search_parameters_rbf,
-                          search_parameters_linear,
+classifier = SVM.training(pipeline,
+                          search_parameters,
                           X_train,
                           y_train )
 
+# Imprimir mejores resultados 
 print("Mejor F-1 weighted score")
 print(classifier.best_score_)
 print("Mejores hyperparámetros")
@@ -127,6 +159,7 @@ print(classifier.best_params_)
 
 y_pred, y_score_probability = SVM.evaluation(classifier, X_test, y_test)
 
+# Imprimir los resultados de la evaluación 
 print("Resultados de evaluación")
 print(f"F1 weighted: {f1_score(y_test, y_pred, average='weighted')}")
 print("Precision: {}".format(precision_score(y_test, y_pred, average='weighted')))
@@ -137,120 +170,43 @@ print("AUROC weighted: {}".format(roc_auc_score(y_test, y_score_probability, mul
 #=============================================================
 
 # Matriz de confusión
-svm_confusion_matrix=SVM.confusion_matrix(y_test,y_pred)
-print(svm_confusion_matrix)
+svm_confusion_matrix=confusion_matrix(y_test,y_pred)
+print(f"Matriz de confusión: {svm_confusion_matrix}")
 
-disp = SVM.ConfusionMatrixDisplay(confusion_matrix=svm_confusion_matrix,
+# Visualización de la matriz de confusión
+disp = ConfusionMatrixDisplay(confusion_matrix=svm_confusion_matrix,
                                display_labels=classifier.classes_)
 disp.plot(cmap=plt.cm.Blues)
+# Guardar la matriz
+plt.savefig('../results/SVM_results/confusion_matrix.png')
+# Mostrar la matriz
 plt.show()
 
 # Reporte de clasificación
-print(SVM.classification_report(y_test,y_pred))
+print(f"Reporte de clasificación: {classification_report(y_test,y_pred)}")
 
 #=======================================================================
 
 # Plots ROC
 
-import numpy as np
-from sklearn.metrics import auc # Import auc explicitly
-
-import numpy as np
-import matplotlib.pyplot as plt
-from sklearn.preprocessing import label_binarize
-from sklearn.metrics import roc_curve, auc, roc_auc_score
-
-
-def plot(model, X_test, y_test, class_names):
-
-    classes = np.unique(y_test)
-    n_classes = len(classes)
-
-    y_test_bin = label_binarize(y_test, classes=classes)
-
-    y_score = model.predict_proba(X_test)
-
-    fpr = {}
-    tpr = {}
-    roc_auc = {}
-
-    for i in range(n_classes):
-        fpr[i], tpr[i], _ = roc_curve(y_test_bin[:, i], y_score[:, i])
-        roc_auc[i] = auc(fpr[i], tpr[i])
-
-    auc_roc_weighted_ovr = roc_auc_score(
-        y_test,
-        y_score,
-        multi_class="ovr",
-        average="weighted"
-    )
-
-    print("AUC ROC (OVR, weighted):", auc_roc_weighted_ovr)
-
-    plt.figure(figsize=(8, 8))
-
-    for i in range(n_classes):
-        plt.plot(
-            fpr[i],
-            tpr[i],
-            label=f'Clase {classes[i]} (AUC = {roc_auc[i]:.2f})'
-        )
-
-    plt.plot([0, 1], [0, 1], linestyle="--", color="gray")
-
-    plt.title('Curvas ROC multiclase (one-vs-rest) – SVM')
-    plt.xlabel("False Positive Rate")
-    plt.ylabel("True Positive Rate")
-    plt.legend(loc="lower right")
-    plt.grid(True)
-    plt.tight_layout()
-    plt.show()
-
 best_svm = classifier.best_estimator_
 y_pred = best_svm.predict(X_test)
 
-plot(
+ROC_plt = SVM.plot(
         model = best_svm,
         X_test = X_test,
         y_test = y_test,
-        class_names = le.classes_
+        class_names = le.classes_,
+        file = '../results/SVM_results/ROC_curve.png'
     )
 
 # Curva ROC por cada clase:
 
-def plot_per_class(model, X_test, y_test, class_names):
-
-  classes = np.unique(y_test)
-  y_test_bin = label_binarize(y_test, classes=classes)
-  y_score_probabilities = model.predict_proba(X_test)
-
-  for i, cls in enumerate(classes):
-
-        fpr, tpr, _ = roc_curve(y_test_bin[:, i], y_score_probabilities[:, i]) # Use probabilities
-        roc_auc = auc(fpr, tpr)
-
-        plt.figure(figsize=(6, 6))
-        plt.plot(fpr, tpr, lw=2,
-                 label=f"AUC = {roc_auc:.2f}")
-        plt.plot([0, 1], [0, 1], linestyle="--", color="gray")
-
-        title = f"ROC – Clase {cls}"
-        if class_names is not None:
-            title = f"ROC – {class_names[cls]}"
-
-        plt.title(title)
-        plt.xlabel("False Positive Rate")
-        plt.ylabel("True Positive Rate")
-        plt.legend(loc="lower right")
-        plt.grid(True)
-        plt.tight_layout()
-        plt.show()
-
-
-plot_per_class(model=best_svm,
+plot_per_class=SVM.plot_per_class(model=best_svm,
     X_test=X_test,
     y_test=y_test,
-    class_names=le.classes_)
+    class_names=le.classes_,
+    file = '../results/SVM_results/ROC_curve_per_class.png')
 
 # Guardar resultados 
 
@@ -273,8 +229,7 @@ mejor_selector = None
 mejor_vt = None
 
 for k in ks:
-  classifier, selector, vt_current = SVM_reduction.training_with_reduction(search_parameters_rbf,
-                            search_parameters_linear,
+  classifier, selector, vt_current = SVM_reduction.training_with_reduction(pipeline, search_parameters,
                             X_train,
                             y_train,
                             k=k)
@@ -312,104 +267,34 @@ print("MCC: {}". format(matthews_corrcoef(y_test, y_pred)))
 print("AUROC weighted: {}".format(roc_auc_score(y_test, y_score_probabilities, multi_class='ovr', average='weighted')))
 
 # Matriz de confusión
-svm_confusion_matrix=SVM.confusion_matrix(y_test,y_pred)
-print(svm_confusion_matrix)
+svm_confusion_matrix=confusion_matrix(y_test,y_pred)
+print(f"Matriz de confusión con la reducción de dimensionalidad: {svm_confusion_matrix}")
 
 disp = SVM.ConfusionMatrixDisplay(confusion_matrix=svm_confusion_matrix,
                                display_labels=classifier.classes_)
 disp.plot(cmap=plt.cm.Blues)
+plt.savefig('../results/SVM_results/confusion_matrix_with_reduction.png')
 plt.show()
 
 # Reporte de clasificación
-print(SVM.classification_report(y_test,y_pred))
+print(f"Reporte de clasificación con reducción de dimensionalidad: {SVM.classification_report(y_test,y_pred)}")
 
-def plot(model, X_test, y_test, class_names):
-
-    classes = np.unique(y_test)
-    n_classes = len(classes)
-
-    y_test_bin = label_binarize(y_test, classes=classes)
-
-    y_score = model.predict_proba(X_test)
-
-    fpr = {}
-    tpr = {}
-    roc_auc = {}
-
-    for i in range(n_classes):
-        fpr[i], tpr[i], _ = roc_curve(y_test_bin[:, i], y_score[:, i])
-        roc_auc[i] = auc(fpr[i], tpr[i])
-
-    auc_roc_weighted_ovr = roc_auc_score(
-        y_test,
-        y_score,
-        multi_class="ovr",
-        average="weighted"
-    )
-
-    print("AUC ROC (OVR, weighted):", auc_roc_weighted_ovr)
-
-    plt.figure(figsize=(8, 8))
-
-    for i in range(n_classes):
-        plt.plot(
-            fpr[i],
-            tpr[i],
-            label=f'Clase {classes[i]} (AUC = {roc_auc[i]:.2f})'
-        )
-
-    plt.plot([0, 1], [0, 1], linestyle="--", color="gray")
-
-    plt.title('Curvas ROC multiclase (one-vs-rest) – SVM')
-    plt.xlabel("False Positive Rate")
-    plt.ylabel("True Positive Rate")
-    plt.legend(loc="lower right")
-    plt.grid(True)
-    plt.tight_layout()
-    plt.show()
+# ROC curve plot 
 
 best_svm = mejor_classifier.best_estimator_
 y_pred = best_svm.predict(X_test_sel)
 
-plot(
+ROC_plot_with_reduction = SVM.plot(
         model = best_svm,
         X_test = X_test_sel,
         y_test = y_test,
-        class_names = le.classes_
-    )
+        class_names = le.classes_,
+        file = '../results/SVM_results/ROC_curve_with_reduction.png')
 
 # Curva ROC por cada clase:
 
-def plot_per_class(model, X_test, y_test, class_names):
-
-  classes = np.unique(y_test)
-  y_test_bin = label_binarize(y_test, classes=classes)
-  y_score_probabilities = model.predict_proba(X_test)
-
-  for i, cls in enumerate(classes):
-
-        fpr, tpr, _ = roc_curve(y_test_bin[:, i], y_score_probabilities[:, i]) # Use probabilities
-        roc_auc = auc(fpr, tpr)
-
-        plt.figure(figsize=(6, 6))
-        plt.plot(fpr, tpr, lw=2,
-                 label=f"AUC = {roc_auc:.2f}")
-        plt.plot([0, 1], [0, 1], linestyle="--", color="gray")
-
-        title = f"ROC – Clase {cls}"
-        if class_names is not None:
-            title = f"ROC – {class_names[cls]}"
-
-        plt.title(title)
-        plt.xlabel("False Positive Rate")
-        plt.ylabel("True Positive Rate")
-        plt.legend(loc="lower right")
-        plt.grid(True)
-        plt.tight_layout()
-        plt.show()
-
-
-plot_per_class(model=best_svm,
+ROC_curve_per_class=plot_per_class(model=best_svm,
     X_test=X_test_sel,
     y_test=y_test,
-    class_names=le.classes_)
+    class_names=le.classes_, 
+    file='../results/SVM_results/ROC_curve_per_class_with_reduction.png')
